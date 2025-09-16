@@ -76,7 +76,7 @@ export async function getPollById(id: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("polls")
-    .select("*")
+    .select("*, votes(*)")
     .eq("id", id)
     .single();
 
@@ -91,18 +91,19 @@ export async function submitVote(pollId: string, optionIndex: number) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Optionally require login to vote
-  // if (!user) return { error: 'You must be logged in to vote.' };
+  if (!user) return { error: "You must be logged in to vote." };
 
-  const { error } = await supabase.from("votes").insert([
+  const { error } = await supabase.from("votes").upsert(
     {
       poll_id: pollId,
-      user_id: user?.id ?? null,
+      user_id: user.id,
       option_index: optionIndex,
     },
-  ]);
+    { onConflict: "poll_id, user_id" }
+  );
 
   if (error) return { error: error.message };
+  revalidatePath(`/polls/${pollId}`);
   return { error: null };
 }
 
